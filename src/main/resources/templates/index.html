@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket</title>
+    <script src="https://cdn.staticfile.org/jquery/1.10.2/jquery.min.js"></script>
+    <style>
+        a{border: 2px solid;background-color: #eeeeee;}
+    </style>
+
+</head>
+<body>
+<h3>hello socket</h3>
+<p>操作:<div><a onclick="openSocket()">开启socket</a></div></p>
+<p>【to】：<div><input id="totoken" /></div></p><p>【消息】：<div><input id="msg" /></div></p>
+<p>【操作】：<div><a onclick="sendMessage()">发送消息</a></div></p>
+</body>
+<script>
+    var token;
+    var socket;
+    //离线标志
+    var offline = true;
+    var lockReconnect = false;
+    var tt;
+
+    $(function () {
+        $.ajax({
+            url: "/websocket/token",
+            success: function(ret){
+                console.log("token: " + ret);
+                token = ret;
+            }
+        })
+    });
+
+    function openSocket() {
+        createSocket();
+        initEvent();
+        offline = false;
+    }
+
+    function createSocket() {
+        if(typeof(WebSocket) == "undefined") {
+            console.log("您的浏览器不支持WebSocket");
+        }else if(!token){
+            console.log("token 为空")
+        }else{
+            console.log("您的浏览器支持WebSocket");
+            //实现化WebSocket对象，指定要连接的服务器地址与端口  建立连接
+            var socketUrl="ws://127.0.0.1/ws/"+token;
+            console.log(socketUrl);
+            if(socket!=null){
+                socket.close();
+                socket=null;
+            }
+            socket = new WebSocket(socketUrl);
+        }
+    }
+
+    function initEvent() {
+        //打开事件
+        socket.onopen = function() {
+            console.log("websocket已打开");
+            heartCheck.start();
+        };
+
+        //获得消息事件
+        socket.onmessage = function(msg) {
+            var serverMsg = "收到服务端信息：" + msg.data;
+            console.log(serverMsg);
+        };
+
+        //关闭事件
+        socket.onclose = function() {
+            console.log("websocket已关闭");
+            if(!offline){
+                reconnect();
+            }
+        };
+
+        //发生了错误事件
+        socket.onerror = function() {
+            console.log("websocket发生了错误");
+        }
+    }
+
+    //重连
+    function reconnect() {
+        if(lockReconnect) {
+            return;
+        };
+        lockReconnect = true;
+        //没连接上会一直重连，设置延迟避免请求过多
+        tt && clearTimeout(tt);
+        tt = setTimeout(function () {
+            console.log("重连...");
+            openSocket();
+            lockReconnect = false;
+        }, 4000);
+    }
+
+    //心跳检测
+    var heartCheck = {
+        timeout: 3000,
+        timeoutObj: null,
+        start: function(){
+            this.timeoutObj && clearTimeout(this.timeoutObj);
+            this.timeoutObj = setInterval(function(){
+                //这里发送一个心跳，后端收到后，返回一个心跳消息，
+                send("ping");
+                console.log("ping");
+            }, this.timeout)
+        }
+    };
+
+    function send(msg) {
+        try{
+            socket.send(msg);
+        }catch (e) {
+            console.error("发送消息失败");
+            console.error(e);
+        }
+    }
+
+    function sendMessage() {
+        if(typeof(WebSocket) == "undefined") {
+            console.log("您的浏览器不支持WebSocket");
+        }else {
+            var totoken = document.getElementById('totoken').value;
+            var msg = document.getElementById('msg').value;
+            var msgbody = '{"totoken":"'+totoken+'","msg":"'+msg+'"}';
+            console.log(msgbody);
+            send(msgbody);
+        }
+    }
+
+</script>
+</html>
